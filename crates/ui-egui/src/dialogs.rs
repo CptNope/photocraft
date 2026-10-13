@@ -195,7 +195,10 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
             if let Some(w) = wide {
                 ui.set_min_width(w.min(460.0));
             }
-            if d.kind == DialogKind::NewDocument {
+            let phone_new_document = d.kind == DialogKind::NewDocument && ctx.content_rect().width() < 650.0;
+            if phone_new_document {
+                ui.set_min_width((ctx.content_rect().width() - 36.0).max(250.0));
+            } else if d.kind == DialogKind::NewDocument {
                 ui.set_min_width(800.0);
             }
             // The About window: room for the contributor table, the same width on every tab.
@@ -204,7 +207,7 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
                 ui.set_min_width(700.0);
             }
             ui.set_max_width(wide.unwrap_or(if d.kind == DialogKind::NewDocument {
-                800.0
+                if phone_new_document { (ctx.content_rect().width() - 36.0).max(250.0) } else { 800.0 }
             } else if about_tabs {
                 700.0
             } else if d.kind == DialogKind::LayerStyle || d.fields.contains_key("__export") || crate::color_picker_ui::owns(&d.fields) {
@@ -242,7 +245,17 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
             crate::field_tab::begin(ui.ctx());
             match d.kind {
                 DialogKind::NewDocument => {
-                    if crate::new_doc_ui::body(app, ui, &mut fields) {
+                    if phone_new_document {
+                        let room = (ctx.content_rect().height() - DIALOG_CHROME).max(140.0);
+                        egui::ScrollArea::vertical()
+                            .id_salt(id.with("mobile-new-document"))
+                            .max_height(room)
+                            .show(ui, |ui| {
+                                if crate::new_doc_ui::mobile_body(app, ui, &mut fields) {
+                                    outcome = Some(true);
+                                }
+                            });
+                    } else if crate::new_doc_ui::body(app, ui, &mut fields) {
                         outcome = Some(true);
                     }
                 }
