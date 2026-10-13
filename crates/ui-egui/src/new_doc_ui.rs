@@ -492,6 +492,87 @@ fn save_preset(app: &mut crate::PhotocraftApp, ui: &mut egui::Ui, f: &mut Map<St
     }
 }
 
+/// Compact new-document form for phone-sized web viewports.
+/// Keep the existing document command fields and validation; only layout differs.
+pub fn mobile_body(app: &mut crate::PhotocraftApp, ui: &mut egui::Ui, f: &mut Map<String, Value>) -> bool {
+    let category = get_s(f, "__category", "Recent");
+    ui.label(tl!("Category"));
+    egui::ComboBox::from_id_salt("nd-mobile-category")
+        .selected_text(tl!(category.as_str()))
+        .width((ui.available_width() - 8.0).max(180.0))
+        .show_ui(ui, |ui| {
+            for (name, _) in CATEGORIES {
+                if ui.selectable_label(category == *name, tl!(*name)).clicked() {
+                    f.insert("__category".into(), json!(name));
+                }
+            }
+        });
+
+    let category = get_s(f, "__category", "Recent");
+    let presets = CATEGORIES.iter().find(|(name, _)| *name == category)
+        .map(|(_, entries)| *entries).unwrap_or(CATEGORIES[0].1);
+    let selected = get_s(f, "__preset", "");
+    ui.label(tl!("Preset"));
+    egui::ComboBox::from_id_salt("nd-mobile-preset")
+        .selected_text(if selected.is_empty() { tl!("Custom").to_owned() } else { tl!(selected.as_str()).to_owned() })
+        .width((ui.available_width() - 8.0).max(180.0))
+        .show_ui(ui, |ui| {
+            let unit_prefs = app.session.prefs().units_and_rulers.clone();
+            for preset in presets {
+                if ui.selectable_label(selected == preset.0, tl!(preset.0)).clicked() {
+                    apply_preset(f, preset, &unit_prefs);
+                }
+            }
+        });
+    ui.add_space(5.0);
+    small_label(ui, tl!("Name"));
+    let mut name = get_s(f, "name", "Untitled-1");
+    if ui.add_sized([ui.available_width().max(200.0), 30.0], egui::TextEdit::singleline(&mut name)).changed() {
+        f.insert("name".into(), json!(name));
+    }
+
+    // Explicit pixel units keep these fields workable even when a print preset
+    // was previously selected and uses inches in desktop mode.
+    f.insert("__unit".into(), json!("px"));
+    let ppi = get_f(f, "resolution", 72.0);
+    ui.columns(2, |columns| {
+        for (column, key, label, default) in [(0, "width", tl!("Width"), 1920.0), (1, "height", tl!("Height"), 1080.0)] {
+            small_label(&mut columns[column], label);
+            let mut dimension = get_f(f, key, default).round().clamp(1.0, 300_000.0) as u32;
+            if columns[column].add(egui::DragValue::new(&mut dimension).range(1..=300_000).speed(1.0)).changed() {
+                set_size(f, key, dimension as f32, "px", ppi);
+            }
+        }
+    });
+    small_label(ui, tl!("Resolution"));
+    let mut resolution = ppi.round().clamp(1.0, 30_000.0) as u32;
+    if ui.add(egui::DragValue::new(&mut resolution).range(1..=30_000).speed(1.0)).changed() {
+        set_resolution(f, resolution as f32);
+    }
+    small_label(ui, tl!("Background Contents"));
+    let mut background = get_s(f, "background", "white");
+    egui::ComboBox::from_id_salt("nd-mobile-background")
+        .selected_text(match background.as_str() {
+            "white" => tl!("White"), "black" => tl!("Black"),
+            "transparent" => tl!("Transparent"),
+            "backgroundColor" => tl!("Background Color"), _ => tl!("Custom"),
+        })
+        .width((ui.available_width() - 8.0).max(180.0))
+        .show_ui(ui, |ui| {
+            for (value, label) in [
+                ("white", tl!("White")), ("black", tl!("Black")),
+                ("transparent", tl!("Transparent")),
+                ("backgroundColor", tl!("Background Color")),
+            ] {
+                if ui.selectable_label(background == value, label).clicked() {
+                    background = value.to_string();
+                    f.insert("background".into(), json!(value));
+                }
+            }
+        });
+    false // Standard dialog Create/Close buttons are handled by dialogs::show.
+}
+
 /// Returns whether a preset double-click requested creation, after applying its settings.
 /// A recent category click can make egui count the preset double-click as a triple-click.
 pub fn body(app: &mut crate::PhotocraftApp, ui: &mut egui::Ui, f: &mut Map<String, Value>) -> bool {
