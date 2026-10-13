@@ -1200,10 +1200,28 @@ pub fn menu_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) -> f32 {
                 // render as submenus.
                 let bar = egui::containers::menu::MenuConfig::find(ui);
                 let config = egui::containers::menu::MenuConfig::new().close_behavior(bar.close_behavior).style(bar.style.clone());
-                let open = title_press(ui.ctx(), &title);
-                // The release ending the press that opened this menu is a click "outside" the
-                // popup: it must not close it again.
-                let opening = title.clicked() && ui.ctx().data(|d| d.get_temp::<bool>(press_gesture_id())).unwrap_or(false);
+                // Browser touch/pen taps may produce the click on release without the
+                // mouse-style primary_pressed event expected by title_press. On
+                // touch-sized web viewports, use the completed click to toggle the
+                // menu, while leaving desktop press-and-drag gestures unchanged.
+                let web_touch_layout = cfg!(target_arch = "wasm32") && ui.ctx().content_rect().width() < 1100.0;
+                let open = if web_touch_layout {
+                    if title.clicked() {
+                        let id = egui::Popup::default_response_id(&title);
+                        Some(egui::SetOpenCommand::Bool(!egui::Popup::is_id_open(ui.ctx(), id)))
+                    } else {
+                        None
+                    }
+                } else {
+                    title_press(ui.ctx(), &title)
+                };
+                // Opening on release is also an outside click for a new popup.
+                // Ignore that single click so the menu remains visible.
+                let opening = if web_touch_layout {
+                    title.clicked()
+                } else {
+                    title.clicked() && ui.ctx().data(|d| d.get_temp::<bool>(press_gesture_id())).unwrap_or(false)
+                };
                 let close = if opening {
                     egui::PopupCloseBehavior::IgnoreClicks
                 } else if top == "Help" {
