@@ -84,6 +84,16 @@ pub fn start() {
                     let (session, warnings) = crate::preset_bridge::session(presets.clone());
                     preset_warnings.extend(warnings);
                     let mut app = PhotocraftApp::new(session, services(inbox.clone()));
+                    // Phones default to a canvas-first workspace; Window menu can reopen panels.
+                    let narrow = web_sys::window()
+                        .and_then(|w| w.inner_width().ok())
+                        .and_then(|v| v.as_f64())
+                        .is_some_and(|width| width < 650.0);
+                    if narrow {
+                        app.ui.panels.dock = false;
+                        app.ui.panels.rail = false;
+                        app.ui.panels.options_bar = false;
+                    }
                     if !preset_warnings.is_empty() {
                         photocraft_ui_egui::notices::post(&mut app, i18n::t("Some brush presets could not be loaded"), preset_warnings, true, None);
                     }
