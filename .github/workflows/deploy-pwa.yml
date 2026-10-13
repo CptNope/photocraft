@@ -1,0 +1,81 @@
+name: Deploy PhotoCraft PWA to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/deploy-pwa.yml"
+      - "apps/**"
+      - "crates/**"
+      - "assets/**"
+      - "pwa/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "README-PWA.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: photocraft-pwa-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build PhotoCraft Rust WASM and package PWA
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      CARGO_TERM_COLOR: always
+      CARGO_INCREMENTAL: "0"
+      PHOTOCRAFT_BUILD_SHA: ${{ github.sha }}
+    steps:
+      - name: Check out PhotoCraft fork
+        uses: actions/checkout@v4
+      - name: Install Rust with WebAssembly target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Cache Cargo compilation
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: photocraft-pages-wasm
+      - name: Install Trunk
+        env:
+          TRUNK_VERSION: "0.21.14"
+        run: |
+          curl -fL --retry 3 --retry-delay 2 \
+            "https://github.com/trunk-rs/trunk/releases/download/v${TRUNK_VERSION}/trunk-x86_64-unknown-linux-gnu.tar.gz" \
+            -o "$RUNNER_TEMP/trunk.tar.gz"
+          tar -xzf "$RUNNER_TEMP/trunk.tar.gz" -C "$HOME/.cargo/bin" trunk
+          trunk --version
+      - name: Build browser app from fork sources
+        run: |
+          cd apps/photocraft-web
+          trunk build --release --locked
+      - name: Verify size and relative paths
+        run: packaging/web/package.sh --skip-build
+      - name: Prepare PWA and offline assets
+        run: python3 pwa/prepare_site.py dist/web
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Upload built website
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist/web
+
+  deploy:
+    name: Publish PhotoCraft PWA
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
