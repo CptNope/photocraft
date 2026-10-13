@@ -41,6 +41,7 @@ def prepare(site: Path):
     for name,size in (("icon-192.png",192),("icon-512.png",512),("apple-touch-icon.png",180)):
         make_icon(icons/name,size)
     shutil.copy2(ROOT/"pwa"/"manifest.webmanifest",site/"manifest.webmanifest")
+    shutil.copy2(ROOT/"pwa"/"install-ui.js",site/"install-ui.js")
     for name in ("LICENSE-MIT","LICENSE-APACHE","NOTICE","ATTRIBUTION.md"):
         source=ROOT/name
         if source.is_file():
@@ -69,13 +70,14 @@ if ("serviceWorker" in navigator) {
 </script>
 '''
         html=html.replace("</body>",script+"</body>",1)
+    html=html.replace("</body>", '<script src="./install-ui.js" defer></script>\n</body>', 1)
     index.write_text(html,encoding="utf-8")
 
     assets=["./"+p.name for p in site.iterdir()
             if p.is_file() and p.suffix.lower() in (".wasm",".js",".css")]
     if not any(name.endswith(".wasm") for name in assets):
         raise SystemExit("No compiled WebAssembly file found")
-    core=["./","./index.html","./manifest.webmanifest","./icons/icon-192.png",
+    core=["./","./index.html","./manifest.webmanifest","./install-ui.js","./icons/icon-192.png",
           "./icons/icon-512.png","./icons/apple-touch-icon.png"]
     template=(ROOT/"pwa"/"sw.js").read_text(encoding="utf-8")
     version=(os.getenv("GITHUB_SHA") or "local")[:12]
