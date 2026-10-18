@@ -1,0 +1,65 @@
+name: Verify PhotoCraft PWA sync
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/verify-pwa.yml"
+      - "apps/**"
+      - "crates/**"
+      - "pwa/**"
+      - "packaging/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/deploy-pwa.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Build and validate upstream sync (no deployment)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      CARGO_INCREMENTAL: "0"
+      CARGO_BUILD_JOBS: "2"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - name: Check Rust formatting
+        run: cargo fmt --all -- --check
+      - name: Install Trunk
+        run: |
+          curl -fL --retry 3 --retry-delay 2 \
+            https://github.com/trunk-rs/trunk/releases/download/v0.21.14/trunk-x86_64-unknown-linux-gnu.tar.gz \
+            -o "$RUNNER_TEMP/trunk.tar.gz"
+          tar -xzf "$RUNNER_TEMP/trunk.tar.gz" -C "$HOME/.cargo/bin" trunk
+      - name: Compile editor
+        run: cd apps/photocraft-web && trunk build --release --locked
+      - name: Compile WebAssembly boot module
+        run: cd apps/photocraft-web-boot && trunk build --release --locked
+      - name: Assemble compressed upstream web package
+        run: packaging/web/package.sh --skip-build
+      - name: Create isolated PWA bundle
+        run: |
+          mkdir -p dist/preview-unpacked
+          unzip -q dist/release/photocraft-web-*.zip -d dist/preview-unpacked
+          site="$(find dist/preview-unpacked -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          test -n "$site"
+          mv "$site" dist/preview
+          python3 pwa/prepare_site.py dist/preview
+          test -f dist/preview/index.html
+          test -f dist/preview/sw.js
+          test -f dist/preview/app/parts.txt
+      - name: Upload preview package
+        uses: actions/upload-artifact@v4
+        with:
+          name: photocraft-pwa-preview
+          path: dist/preview
+          retention-days: 7
