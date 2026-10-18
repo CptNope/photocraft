@@ -54,16 +54,27 @@ jobs:
         run: |
           cd apps/photocraft-web
           trunk build --release --locked
-      - name: Verify size and relative paths
+      - name: Build upstream WebAssembly boot module
+        run: |
+          cd apps/photocraft-web-boot
+          trunk build --release --locked
+      - name: Package split WebAssembly release
         run: packaging/web/package.sh --skip-build
+      - name: Extract package for GitHub Pages PWA
+        run: |
+          mkdir -p dist/pwa-unpacked
+          unzip -q dist/release/photocraft-web-*.zip -d dist/pwa-unpacked
+          site="$(find dist/pwa-unpacked -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          test -n "$site"
+          mv "$site" dist/pwa
       - name: Prepare PWA and offline assets
-        run: python3 pwa/prepare_site.py dist/web
+        run: python3 pwa/prepare_site.py dist/pwa
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
       - name: Upload built website
         uses: actions/upload-pages-artifact@v4
         with:
-          path: dist/web
+          path: dist/pwa
 
   deploy:
     name: Publish PhotoCraft PWA

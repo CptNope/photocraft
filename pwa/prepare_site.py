@@ -73,10 +73,14 @@ if ("serviceWorker" in navigator) {
     html=html.replace("</body>", '<script src="./install-ui.js" defer></script>\n</body>', 1)
     index.write_text(html,encoding="utf-8")
 
-    assets=["./"+p.name for p in site.iterdir()
-            if p.is_file() and p.suffix.lower() in (".wasm",".js",".css")]
+    # Include the upstream boot module and all compressed application parts.
+    assets=["./"+p.relative_to(site).as_posix() for p in site.rglob("*")
+            if p.is_file() and (p.suffix.lower() in (".wasm",".js",".css")
+                                or ".part-" in p.name or p.name == "parts.txt")]
     if not any(name.endswith(".wasm") for name in assets):
         raise SystemExit("No compiled WebAssembly file found")
+    if not any(".part-" in name for name in assets):
+        raise SystemExit("Missing upstream compressed app parts")
     core=["./","./index.html","./manifest.webmanifest","./install-ui.js","./icons/icon-192.png",
           "./icons/icon-512.png","./icons/apple-touch-icon.png"]
     template=(ROOT/"pwa"/"sw.js").read_text(encoding="utf-8")

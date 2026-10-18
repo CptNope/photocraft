@@ -17,6 +17,8 @@ A build can consume substantial RAM and runner resources because PhotoCraft comp
 - iPad: use Safari → Share → **Add to Home Screen**.
 - Desktop: install using the browser's app icon/menu where supported.
 
+The updated build packages upstream's compressed WebAssembly app parts and boot module. Offline reopening depends on the device's available storage; test first launch online.
+
 The build step generates generic app icons (not ArtCraft trademarks), a manifest, a scoped service worker, license notices and an installable web shell. It precaches the compiled JS/WASM and basic assets to support offline reopening. Browser storage limits may prevent full precaching; please open the app online at least once before going offline.
 
 ## Limitations
